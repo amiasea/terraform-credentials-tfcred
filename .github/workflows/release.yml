@@ -315,7 +315,7 @@ jobs:
         env:
           INPUT_VERSION: ${{ needs.build_release.outputs.version }}
         with:
-          github-token: ${{ secrets.WINGET_PAT }}
+          github-token: ${{ secrets.WINGET_CLASSIC_PAT }}
           script: |
             const version = process.env.INPUT_VERSION;
             const branchName = `winget-update-tfcred-${version}`;
