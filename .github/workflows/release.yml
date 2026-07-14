@@ -55,6 +55,38 @@ jobs:
         run: |
           # Run Unit Tests
           go test ./cmd/tfcred/commands/... -v
+          
+  build_e2e:
+    name: build for e2e
+    runs-on: windows-latest
+    needs: [test, lint]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26
+
+      - name: GoReleaser snapshot build
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --snapshot --clean
+          
+      - name: Install Terraform CLI
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: E2E Tests
+        env:
+          TF_CLI_CONFIG_FILE: ${{ github.workspace }}/tests/e2e/terraform.tfrc.json
+          TF_TOKEN_ORG: ${{ secrets.TF_TOKEN_ORG }}
+        run: |
+          # Run your E2E tests
+          go test ./tests/e2e/... -v -count=1
 
   # --- Step 3: Build, Verify E2E Architecture, and Deploy ---
   build_release:
@@ -95,23 +127,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ----------------------------------------------------------------------
-      # E2E Tests
-      # ----------------------------------------------------------------------
-      - name: Install Terraform CLI
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: 1.15.8
-          terraform_wrapper: false
-
-      - name: E2E Tests
-        env:
-          TF_CLI_CONFIG_FILE: ${{ github.workspace }}/tests/e2e/terraform.tfrc.json
-          TF_TOKEN_ORG: ${{ secrets.TF_TOKEN_ORG }}
-        run: |
-          # Run your E2E tests
-          go test ./tests/e2e/... -v -count=1
 
       # ----------------------------------------------------------------------
       # Secure Passwordless Retrieval of App Assets from Azure Key Vault
