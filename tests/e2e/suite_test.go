@@ -14,10 +14,6 @@ func TestMain(m *testing.M) {
 		panic("failed to set TF_CRED_CONTEXT_DIR env var: " + err.Error())
 	}
 
-	if err := buildTfcred(); err != nil {
-		panic(err)
-	}
-
 	os.Exit(
 		m.Run(),
 	)

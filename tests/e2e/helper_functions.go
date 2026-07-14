@@ -55,38 +55,6 @@ func repoRoot() string {
 	)
 }
 
-func buildTfcred() error {
-	cmd := exec.Command(
-		"goreleaser",
-		"release",
-		"--snapshot",
-		"--clean",
-	)
-
-	cmd.Dir = repoRoot()
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf(
-			"goreleaser failed:\n%s\n%w",
-			output,
-			err,
-		)
-	}
-
-	source := filepath.Join(
-		repoRoot(),
-		"dist",
-		"tfcred_windows_amd64_v1",
-		"terraform-credentials-tfcred.exe",
-	)
-
-	return copyFile(
-		source,
-		tfCredBinary,
-	)
-}
-
 func copyFile(
 	source string,
 	target string,
