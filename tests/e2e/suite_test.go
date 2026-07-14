@@ -6,15 +6,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Setenv(
-		"TF_CLI_CONFIG_FILE",
-		tfConfigFile,
-	)
+	if err := os.Setenv("TF_CLI_CONFIG_FILE", tfConfigFile); err != nil {
+		panic("failed to set TF_CLI_CONFIG_FILE env var: " + err.Error())
+	}
 
-	os.Setenv(
-		"TF_CRED_CONTEXT_DIR",
-		tfCredContextDir,
-	)
+	if err := os.Setenv("TF_CRED_CONTEXT_DIR", tfCredContextDir); err != nil {
+		panic("failed to set TF_CRED_CONTEXT_DIR env var: " + err.Error())
+	}
 
 	if err := buildTfcred(); err != nil {
 		panic(err)

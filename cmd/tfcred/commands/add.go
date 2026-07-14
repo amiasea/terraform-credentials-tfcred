@@ -12,6 +12,8 @@ import (
 )
 
 // NewAddCmd creates the add command.
+//
+//nolint:gocyclo
 func NewAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",

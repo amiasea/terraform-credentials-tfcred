@@ -32,7 +32,7 @@ jobs:
         with:
           version: 2.12.2
 
-  # --- Step 2: Run Unit Tests Concurrently ---
+  # --- Step 2: Run Unit Tests ---
   test:
     name: unit tests
     needs: [lint]
@@ -139,22 +139,22 @@ jobs:
       # ----------------------------------------------------------------------
       # Trigger winget pipeline dispatch loop using GitHub App permissions
       # ----------------------------------------------------------------------
-      # - name: Trigger winget workflow
-      #   uses: actions/github-script@v7
-      #   env:
-      #     WINGET_TOKEN: ${{ steps.app-token.outputs.token }}
-      #   with:
-      #     script: |
-      #       // Instantiating custom client via App Token bypasses default GITHUB_TOKEN blocks
-      #       const appOctokit = github.getOctokit(process.env.WINGET_TOKEN);
+      - name: Trigger winget workflow
+        uses: actions/github-script@v7
+        env:
+          WINGET_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          script: |
+            // Instantiating custom client via App Token bypasses default GITHUB_TOKEN blocks
+            const appOctokit = github.getOctokit(process.env.WINGET_TOKEN);
             
-      #       await appOctokit.rest.actions.createWorkflowDispatch({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         workflow_id: "winget.yml",
-      #         ref: "main",
-      #         inputs: {
-      #           version: "${{ steps.meta.outputs.version }}",
-      #           tag: "${{ steps.meta.outputs.tag }}"
-      #         }
-      #       });
+            await appOctokit.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "winget.yml",
+              ref: "main",
+              inputs: {
+                version: "${{ steps.meta.outputs.version }}",
+                tag: "${{ steps.meta.outputs.tag }}"
+              }
+            });

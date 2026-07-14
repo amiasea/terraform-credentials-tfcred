@@ -23,7 +23,6 @@ linters:
     - misspell
     - unparam
 
-  # ← This is the correct v2 location for linter settings
   settings:
     revive:
       confidence: 0.8

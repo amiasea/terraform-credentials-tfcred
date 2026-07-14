@@ -4,26 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       version:
+        description: 'Version (e.g. 1.2.3)'
         required: true
         type: string
       tag:
+        description: 'Git tag (e.g. v1.2.3)'
         required: true
         type: string
 
-# CRITICAL: id-token: write is required for Azure OIDC passwordless authentication
 permissions:
   contents: read
   pull-requests: write
   id-token: write
 
 jobs:
-  create_pr:
-    name: create winget PR
+  validate:
+    name: Validate Winget Assets
     runs-on: ubuntu-latest
+    outputs:
+      installer_url: ${{ steps.assets.outputs.installer_url }}
+      sha: ${{ steps.crypto.outputs.sha }}
+
     steps:
-      # -------------------------------------------------------
-      # 1. Passwordless OIDC Authentication into Azure
-      # -------------------------------------------------------
       - name: Az CLI Login via OIDC
         uses: azure/login@v3
         with:
@@ -31,9 +33,6 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # -------------------------------------------------------
-      # 2. Retrieve App Private Key directly from Azure Key Vault
-      # -------------------------------------------------------
       - name: Fetch Secret from Azure Key Vault
         uses: azure/get-keyvault-secrets@v1
         with:
@@ -41,9 +40,6 @@ jobs:
           secrets: 'amiasea-github-private-key'
         id: kv-fetch
 
-      # -------------------------------------------------------
-      # 3. Resolve the GoReleaser Archive from Releases
-      # -------------------------------------------------------
       - name: Resolve release assets
         id: assets
         uses: actions/github-script@v7
@@ -57,22 +53,15 @@ jobs:
               repo: context.repo.repo,
               tag
             });
-            const assets = release.data.assets;
-            const match = assets.find(a => 
+            const match = release.data.assets.find(a => 
               a.name.toLowerCase().includes("windows") && 
               a.name.toLowerCase().includes("amd64") && 
               a.name.endsWith(".zip")
             );
-            if (!match) {
-              throw new Error("Target Windows AMD64 .zip archive not found in release assets.");
-            }
+            if (!match) throw new Error("Windows AMD64 zip not found");
             core.setOutput("installer_url", match.browser_download_url);
-            core.setOutput("asset_name", match.name);
 
-      # -------------------------------------------------------
-      # 4. Download Archive + Compute Dynamic SHA256 Hash
-      # -------------------------------------------------------
-      - name: Download release asset and hash
+      - name: Download and compute SHA256
         id: crypto
         env:
           INSTALLER_URL: ${{ steps.assets.outputs.installer_url }}
@@ -82,9 +71,33 @@ jobs:
           SHA=$(sha256sum artifact.zip | awk '{print $1}')
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
-      # -------------------------------------------------------
-      # 5. Generate Ephemeral GitHub App Installation Token
-      # -------------------------------------------------------
+      - name: Validation Summary
+        run: |
+          echo "## Winget Validation Successful" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SHA256: ${{ steps.crypto.outputs.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  submit:
+    name: Submit to microsoft/winget-pkgs
+    needs: validate
+    runs-on: ubuntu-latest
+    if: false
+
+    steps:
+      - name: Az CLI Login via OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch Secret from Azure Key Vault
+        uses: azure/get-keyvault-secrets@v1
+        with:
+          keyvault: 'kv-tfcred'
+          secrets: 'amiasea-github-private-key'
+        id: kv-fetch
+
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@v1
@@ -92,19 +105,15 @@ jobs:
           app-id: ${{ vars.AMIASEA_GH_APP_ID }}
           private-key: ${{ steps.kv-fetch.outputs.amiasea-github-private-key }}
           owner: amiasea
-          repositories: |
-            winget-pkgs
+          repositories: winget-pkgs
 
-      # -------------------------------------------------------
-      # 6. Create Upstream PR Using App Context Token
-      # -------------------------------------------------------
       - name: Submit manifests directly via GitHub API
         id: submit-manifests
         uses: actions/github-script@v7
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          INSTALLER_URL: ${{ steps.assets.outputs.installer_url }}
-          INSTALLER_SHA: ${{ steps.crypto.outputs.sha }}
+          INSTALLER_URL: ${{ needs.validate.outputs.installer_url }}
+          INSTALLER_SHA: ${{ needs.validate.outputs.sha }}
           WINGET_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           script: |
@@ -115,14 +124,13 @@ jobs:
             
             const appOctokit = github.getOctokit(process.env.WINGET_TOKEN);
             
-            // v1.12.0 multi-file manifest structures
             const file1Content = `# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0
             PackageIdentifier: amiasea.tfcred
             PackageVersion: ${version}
             DefaultLocale: en-US
             ManifestType: version
             ManifestVersion: 1.12.0`;
-            
+
             const file2Content = `# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0
             PackageIdentifier: amiasea.tfcred
             PackageVersion: ${version}
@@ -157,7 +165,7 @@ jobs:
                 ProductCode: tfcred-v${version}
             ManifestType: installer
             ManifestVersion: 1.12.0`;
-            
+
             const file3Content = `# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0
             PackageIdentifier: amiasea.tfcred
             PackageVersion: ${version}
@@ -168,24 +176,22 @@ jobs:
             ShortDescription: Terraform credential context manager
             ManifestType: defaultLocale
             ManifestVersion: 1.12.0`;
-            
+
             const manifestPath = `manifests/a/amiasea/tfcred/${version}`;
-            
-            console.log(`[winget] Fetching latest upstream tracking ref from master branch...`);
+
             const masterRef = await appOctokit.rest.git.getRef({
               owner: 'amiasea',
               repo: 'winget-pkgs',
               ref: 'heads/master'
             });
-            
-            console.log(`[winget] Creating tracking branch ${branchName} inside amiasea/winget-pkgs...`);
+
             await appOctokit.rest.git.createRef({
               owner: 'amiasea',
               repo: 'winget-pkgs',
               ref: `refs/heads/${branchName}`,
               sha: masterRef.data.object.sha
             });
-            
+
             async function commitFile(path, content, message) {
               await appOctokit.rest.repos.createOrUpdateFileContents({
                 owner: 'amiasea',
@@ -196,13 +202,11 @@ jobs:
                 branch: branchName
               });
             }
-            
-            console.log(`[winget] Writing manifest files to branch...`);
+
             await commitFile(`${manifestPath}/amiasea.tfcred.yaml`, file1Content, `feat: add version manifest for ${version}`);
             await commitFile(`${manifestPath}/amiasea.tfcred.installer.yaml`, file2Content, `feat: add installer manifest for ${version}`);
             await commitFile(`${manifestPath}/amiasea.tfcred.locale.en-US.yaml`, file3Content, `feat: add locale manifest for ${version}`);
-            
-            console.log(`[winget] Opening Pull Request against microsoft/winget-pkgs...`);
+
             const pr = await appOctokit.rest.pulls.create({
               owner: 'microsoft',
               repo: 'winget-pkgs',
@@ -211,17 +215,11 @@ jobs:
               head: `amiasea:${branchName}`,
               base: 'master'
             });
-            
-            console.log(`[winget] Success! PR Opened: ${pr.data.html_url}`);
+
             core.setOutput("pr_url", pr.data.html_url);
 
-      # -------------------------------------------------------
-      # 7. Step Summary Output Dashboard
-      # -------------------------------------------------------
       - name: Summary
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
         run: |
           echo "## Winget PR Created Successfully" >> $GITHUB_STEP_SUMMARY
-          echo "- Version: ${INPUT_VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "- PR: ${{ steps.submit-manifests.outputs.pr_url || 'See previous step output' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- PR: ${{ steps.submit-manifests.outputs.pr_url }}" >> $GITHUB_STEP_SUMMARY
