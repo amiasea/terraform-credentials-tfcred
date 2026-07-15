@@ -227,7 +227,7 @@ jobs:
       - name: Upgrade WinGet Client Silently
         shell: pwsh
         run: |
-          winget upgrade Microsoft.AppInstaller --silent --accept-source-agreements --accept-package-agreements --disable-interactivity
+          winget upgrade winget --accept-package-agreements --accept-source-agreements --disable-interactivity
 
       - name: Verify upgraded WinGet info
         shell: pwsh
@@ -273,7 +273,7 @@ jobs:
       - name: Upgrade WinGet Client Silently
         shell: pwsh
         run: |
-          winget upgrade Microsoft.AppInstaller --silent --accept-source-agreements --accept-package-agreements --disable-interactivity
+          winget upgrade winget --accept-package-agreements --accept-source-agreements --disable-interactivity
 
       - name: Verify upgraded WinGet info
         shell: pwsh
