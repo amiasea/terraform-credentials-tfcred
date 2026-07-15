@@ -219,11 +219,19 @@ jobs:
             -InstallerUrl "$env:INSTALLER_URL" `
             -InstallerSha256 "$env:INSTALLER_SHA"
 
-      - name: Show WinGet info
+      - name: Check initial WinGet version
         shell: pwsh
         run: |
           winget --info
-          winget upgrade Microsoft.AppInstaller --silent --accept-source-agreements --accept-package-agreements
+
+      - name: Upgrade WinGet Client Silently
+        shell: pwsh
+        run: |
+          winget upgrade Microsoft.AppInstaller --silent --accept-source-agreements --accept-package-agreements --disable-interactivity
+
+      - name: Verify upgraded WinGet info
+        shell: pwsh
+        run: |
           winget --info
 
       - name: Upload WinGet manifests
@@ -256,6 +264,21 @@ jobs:
         with:
           name: winget-manifests
           path: manifests
+
+      - name: Check initial WinGet version
+        shell: pwsh
+        run: |
+          winget --info
+
+      - name: Upgrade WinGet Client Silently
+        shell: pwsh
+        run: |
+          winget upgrade Microsoft.AppInstaller --silent --accept-source-agreements --accept-package-agreements --disable-interactivity
+
+      - name: Verify upgraded WinGet info
+        shell: pwsh
+        run: |
+          winget --info
 
       - name: Validate manifest
         shell: pwsh
