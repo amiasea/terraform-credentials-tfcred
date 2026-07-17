@@ -23,7 +23,7 @@ func Err(msg string) {
 }
 
 // AppendFile appends a timestamped error message to the specified file.
-func AppendFile(path string, msg string) {
+func AppendFile(path, msg string) {
 	file, err := os.OpenFile(
 		path,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
@@ -32,14 +32,21 @@ func AppendFile(path string, msg string) {
 	if err != nil {
 		return
 	}
-	defer file.Close()
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed closing log file: %v\n", err)
+		}
+	}()
 
 	timestamp := time.Now().Format(time.RFC3339)
 
-	fmt.Fprintf(
+	if _, err := fmt.Fprintf(
 		file,
 		"%s %s\n",
 		timestamp,
 		msg,
-	)
+	); err != nil {
+		return
+	}
 }

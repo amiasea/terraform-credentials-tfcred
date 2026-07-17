@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/amiasea/terraform-credentials-tfcred/internal/store"
 	"github.com/spf13/cobra"
@@ -24,10 +23,7 @@ and configuring Terraform integration.`,
 				domain = promptDefaultDomain()
 			}
 
-			if err := runInit(domain); err != nil {
-				fmt.Fprintf(os.Stderr, "[tfcred] ❌ %v\n", err)
-				os.Exit(1)
-			}
+			runInit(domain)
 
 			fmt.Println("[tfcred] ✅ Initialization completed successfully.")
 		},
@@ -38,7 +34,7 @@ and configuring Terraform integration.`,
 	return cmd
 }
 
-func runInit(defaultDomain string) error {
+func runInit(defaultDomain string) {
 	// Initialize tfcred internal storage only.
 	//
 	// Installation concerns are intentionally handled by the installer:
@@ -50,6 +46,4 @@ func runInit(defaultDomain string) error {
 	store.Init(defaultDomain)
 
 	fmt.Println("[tfcred] ✅ tfcred storage initialized.")
-
-	return nil
 }
